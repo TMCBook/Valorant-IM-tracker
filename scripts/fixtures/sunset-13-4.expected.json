@@ -1,0 +1,18 @@
+{
+  "layout": "Match Details (client history): KDA, first bloods, plants, defuses only",
+  "map": "Sunset",
+  "ally_rounds": 13,
+  "enemy_rounds": 4,
+  "players": [
+    { "side": "ally", "name": "CAL GST", "kills": 27, "deaths": 12, "assists": 9, "first_bloods": 4, "plants": 4, "defuses": 0 },
+    { "side": "ally", "name": "JK100", "kills": 16, "deaths": 11, "assists": 7, "first_bloods": 1, "plants": 0, "defuses": 0 },
+    { "side": "ally", "name": "Greentoilet2", "kills": 15, "deaths": 10, "assists": 8, "first_bloods": 1, "plants": 4, "defuses": 0 },
+    { "side": "enemy", "name": "5ft2 300lb", "kills": 15, "deaths": 13, "assists": 5, "first_bloods": 2, "plants": 0, "defuses": 0 },
+    { "side": "ally", "name": "kim jong goon", "kills": 13, "deaths": 10, "assists": 4, "first_bloods": 4, "plants": 0, "defuses": 2 },
+    { "side": "enemy", "name": "Mathbookair", "kills": 13, "deaths": 15, "assists": 3, "first_bloods": 1, "plants": 3, "defuses": 0 },
+    { "side": "enemy", "name": "Agony0", "kills": 11, "deaths": 16, "assists": 2, "first_bloods": 4, "plants": 0, "defuses": 0 },
+    { "side": "enemy", "name": "Chimken", "kills": 8, "deaths": 14, "assists": 4, "first_bloods": 0, "plants": 0, "defuses": 0 },
+    { "side": "enemy", "name": "Serrindipity", "kills": 6, "deaths": 16, "assists": 5, "first_bloods": 0, "plants": 0, "defuses": 0 },
+    { "side": "ally", "name": "Non GMO Chickens", "kills": 3, "deaths": 11, "assists": 4, "first_bloods": 0, "plants": 1, "defuses": 0 }
+  ]
+}
