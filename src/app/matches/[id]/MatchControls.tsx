@@ -8,7 +8,7 @@ export function DeleteMapButton({ mapId }: { mapId: string }) {
   return (
     <button
       disabled={pending}
-      className="text-xs text-zinc-500 hover:text-red-400"
+      className="btn btn-danger btn-sm"
       onClick={() => {
         if (!confirm("Delete this map and all its stats? You can re-upload it afterwards.")) return;
         start(async () => {
@@ -27,7 +27,7 @@ export function CompleteToggle({ matchId, completed }: { matchId: string; comple
   return (
     <button
       disabled={pending}
-      className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-800"
+      className="btn btn-secondary"
       onClick={() =>
         start(async () => {
           const r = await setMatchResult(matchId, !completed);

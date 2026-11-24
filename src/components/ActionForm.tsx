@@ -24,7 +24,7 @@ export default function ActionForm({
       <div className="flex items-center gap-3">
         <button
           disabled={pending}
-          className="rounded bg-rose-600 px-4 py-2 text-sm font-semibold hover:bg-rose-500 disabled:opacity-50"
+          className="btn btn-primary"
         >
           {pending ? "Working…" : submit}
         </button>

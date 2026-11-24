@@ -4,8 +4,9 @@ import {
 } from "@/app/actions";
 import { getViewer } from "@/lib/auth";
 import type { PlayerRank } from "@/lib/ranks";
-import { supabasePublic } from "@/lib/supabase";
+import { supabaseAdmin, supabasePublic } from "@/lib/supabase";
 import { riotId, type Player, type Team } from "@/lib/types";
+import { ClaimDecision, UnlinkButton } from "./ClaimButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,63 @@ export default async function AdminPage() {
   // Players whose rank can't load: no #tag, or Riot says the ID doesn't exist.
   const broken = players.filter((p) => !p.riot_tag || rankOf.get(p.id)?.status === "not_found");
 
+  // Profile claims (private table, read with the service role).
+  const { data: claimRows } = await supabaseAdmin()
+    .from("player_claims")
+    .select("id, player_id, discord, created_at")
+    .eq("status", "pending")
+    .order("created_at");
+  const { data: signup } = await supabaseAdmin().from("players").select("id, discord");
+  const signupDiscord = new Map((signup ?? []).map((p) => [p.id as string, p.discord as string | null]));
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const teamName = new Map(teams.map((t) => [t.id, t.name]));
+  const claimed = players.filter((p) => p.user_id);
+
   return (
     <div className="max-w-2xl space-y-8">
       <h1 className="text-2xl font-bold">Admin</h1>
+
+      <section className="card space-y-3 p-4">
+        <h2 className="font-semibold">
+          Profile claims{claimRows?.length ? <span className="ml-2 rounded bg-rose-600 px-2 py-0.5 text-xs">{claimRows.length}</span> : null}
+        </h2>
+        <p className="text-sm text-zinc-400">
+          Players whose Discord matches the sign-up sheet claim instantly. These need you to check: compare the two Discords.
+        </p>
+        {claimRows?.length ? (
+          <ul className="divide-y divide-zinc-800">
+            {claimRows.map((c) => {
+              const p = byId.get(c.player_id);
+              return (
+                <li key={c.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                  <div className="mr-auto">
+                    <div className="font-medium">{p ? riotId(p) : "?"} <span className="text-zinc-500">{p?.team_id ? teamName.get(p.team_id) : ""}</span></div>
+                    <div className="text-xs text-zinc-400">
+                      Requested by <b className="text-zinc-200">{c.discord ?? "unknown"}</b> · sign-up Discord{" "}
+                      <b className="text-zinc-200">{signupDiscord.get(c.player_id) ?? "none"}</b>
+                    </div>
+                  </div>
+                  <ClaimDecision claimId={c.id} />
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-zinc-500">No requests waiting.</p>
+        )}
+        <details className="text-sm">
+          <summary className="cursor-pointer text-zinc-400">{claimed.length} of {players.length} profiles claimed</summary>
+          <ul className="mt-2 space-y-1">
+            {claimed.map((p) => (
+              <li key={p.id} className="flex items-center gap-2">
+                <span>{riotId(p)}</span>
+                <span className="text-zinc-500">{p.team_id ? teamName.get(p.team_id) : ""}</span>
+                <UnlinkButton playerId={p.id} name={riotId(p)} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      </section>
 
       <section className="card space-y-3 p-4">
         <h2 className="font-semibold">Fix a player&apos;s Riot ID</h2>

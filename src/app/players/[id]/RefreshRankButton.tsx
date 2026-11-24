@@ -8,7 +8,7 @@ export default function RefreshRankButton({ playerId }: { playerId: string }) {
   return (
     <button
       disabled={pending}
-      className="underline hover:text-white disabled:opacity-50"
+      className="btn btn-secondary btn-sm"
       onClick={() =>
         start(async () => {
           const r = await refreshRankAction(playerId);

@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import * as z from "zod";
 import { getViewer, requireAdmin, requireUploader } from "@/lib/auth";
 import { syncChallonge } from "@/lib/challonge";
-import { refreshPlayerRank } from "@/lib/ranks";
+import { discordMatch } from "@/lib/claims";
+import { changeRiotId, refreshPlayerRank } from "@/lib/ranks";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase";
 
 export type ActionResult = { ok: true; message?: string; id?: string } | { ok: false; error: string };
@@ -195,21 +196,103 @@ export async function setMatchResult(matchId: string, completed: boolean): Promi
 
 // ---------- Account ----------
 
-export async function linkPlayer(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+/**
+ * Claim a player profile. If the signed-in Discord username matches the
+ * profile's sign-up Discord, it's linked right away; otherwise it waits for
+ * an admin to approve.
+ */
+export async function claimProfileAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   try {
     const viewer = await getViewer();
     if (!viewer) throw new Error("Sign in first.");
+    if (viewer.player) throw new Error("You've already claimed a profile.");
     const playerId = String(form.get("playerId") ?? "");
     const db = supabaseAdmin();
-    const { data: player } = await db.from("players").select("*").eq("id", playerId).single();
-    if (!player) throw new Error("Pick a player.");
-    if (player.user_id && player.user_id !== viewer.userId) {
-      throw new Error("That player is already linked to another account. Ask an admin.");
+    const { data: player } = await db.from("players").select("id, riot_name, user_id, discord").eq("id", playerId).single();
+    if (!player) throw new Error("Pick your profile.");
+    if (player.user_id) throw new Error("That profile is already claimed. If it's yours, ask an admin.");
+
+    // Replace any earlier open claim from this account.
+    await db.from("player_claims").delete().eq("user_id", viewer.userId).eq("status", "pending");
+
+    if (discordMatch(player.discord, viewer.discord) === "exact") {
+      await db.from("players").update({ user_id: viewer.userId }).eq("id", player.id);
+      await db.from("player_claims").insert({
+        player_id: player.id, user_id: viewer.userId, discord: viewer.discord!.username,
+        status: "approved", decided_at: new Date().toISOString(),
+      });
+      revalidatePath("/", "layout");
+      return { ok: true, message: `Claimed ${player.riot_name}. Welcome!` };
     }
-    await db.from("players").update({ user_id: null }).eq("user_id", viewer.userId);
-    await db.from("players").update({ user_id: viewer.userId }).eq("id", playerId);
+    const { error } = await db.from("player_claims").insert({
+      player_id: player.id, user_id: viewer.userId, discord: viewer.discord?.username ?? viewer.email,
+    });
+    if (error) throw new Error(error.message);
     revalidatePath("/account");
-    return { ok: true, message: "Linked. You can upload results now." };
+    revalidatePath("/admin");
+    return { ok: true, message: "Request sent. An admin will approve it soon." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function cancelClaimAction(): Promise<ActionResult> {
+  try {
+    const viewer = await getViewer();
+    if (!viewer) throw new Error("Sign in first.");
+    await supabaseAdmin().from("player_claims").delete().eq("user_id", viewer.userId).eq("status", "pending");
+    revalidatePath("/account");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** A player updates the Riot ID on their own claimed profile (e.g. after a name change). */
+export async function updateMyRiotIdAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  try {
+    const viewer = await getViewer();
+    if (!viewer?.player) throw new Error("Claim your profile first.");
+    const [name, tag] = String(form.get("riotId") ?? "").split("#");
+    const r = await changeRiotId(viewer.player.id, name ?? "", tag ?? "");
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Updated to ${r.name}#${r.tag}${r.rank?.status === "ok" && r.rank.current ? ` (${r.rank.current.tier})` : ""}.` };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Admin: approve or reject a pending profile claim. */
+export async function decideClaimAction(claimId: string, approve: boolean): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const db = supabaseAdmin();
+    const { data: claim } = await db.from("player_claims").select("*").eq("id", claimId).eq("status", "pending").single();
+    if (!claim) throw new Error("That request was already handled.");
+    if (approve) {
+      const { data: player } = await db.from("players").select("user_id").eq("id", claim.player_id).single();
+      if (player?.user_id) throw new Error("That profile was claimed by someone else in the meantime.");
+      await db.from("players").update({ user_id: null }).eq("user_id", claim.user_id); // one profile per account
+      await db.from("players").update({ user_id: claim.user_id }).eq("id", claim.player_id);
+    }
+    await db
+      .from("player_claims")
+      .update({ status: approve ? "approved" : "rejected", decided_at: new Date().toISOString() })
+      .eq("id", claimId);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Admin: disconnect a profile from whoever claimed it. */
+export async function unlinkProfileAction(playerId: string): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    await supabaseAdmin().from("players").update({ user_id: null }).eq("id", playerId);
+    revalidatePath("/", "layout");
+    return { ok: true };
   } catch (e) {
     return fail(e);
   }
@@ -271,24 +354,16 @@ export async function fixRiotIdAction(_: ActionResult | null, form: FormData): P
   try {
     await requireAdmin();
     const playerId = String(form.get("playerId") ?? "");
-    const [name, tag] = String(form.get("riotId") ?? "").split("#").map((s) => s.trim());
     if (!playerId) throw new Error("Pick a player.");
-    if (!name || !tag) throw new Error("Enter the full Riot ID, like Name#TAG.");
-    const db = supabaseAdmin();
-    const { error } = await db
-      .from("players")
-      .update({ riot_name: name, riot_tag: tag, puuid: null })
-      .eq("id", playerId);
-    if (error) throw new Error(error.code === "23505" ? "Another player already has that Riot ID." : error.message);
-    await db.from("player_ranks").delete().eq("player_id", playerId);
-    const r = process.env.HENRIKDEV_API_KEY ? await refreshPlayerRank(playerId) : null;
+    const [name, tag] = String(form.get("riotId") ?? "").split("#");
+    const { name: n, tag: t, rank: r } = await changeRiotId(playerId, name ?? "", tag ?? "");
     revalidatePath("/", "layout");
     return {
       ok: true,
       message:
-        !r ? `Saved ${name}#${tag}.`
-        : r.status === "ok" ? `Saved ${name}#${tag}: ${r.current?.tier ?? "unrated"}.`
-        : `Saved ${name}#${tag}, but the rank lookup said: ${"error" in r ? r.error : r.status}.`,
+        !r ? `Saved ${n}#${t}.`
+        : r.status === "ok" ? `Saved ${n}#${t}: ${r.current?.tier ?? "unrated"}.`
+        : `Saved ${n}#${t}, but the rank lookup said: ${"error" in r ? r.error : r.status}.`,
     };
   } catch (e) {
     return fail(e);

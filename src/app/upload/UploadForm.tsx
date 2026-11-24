@@ -297,11 +297,11 @@ export default function UploadForm({
             <button
               onClick={readScreenshot}
               disabled={!!busy}
-              className="rounded bg-rose-600 px-4 py-2 text-sm font-semibold hover:bg-rose-500 disabled:opacity-50"
+              className="btn btn-primary"
             >
               {busy === "reading" ? "Reading scoreboard… (~20s)" : "Read screenshot"}
             </button>
-            <button onClick={enterManually} className="text-sm text-zinc-400 underline">
+            <button onClick={enterManually} className="btn btn-secondary">
               Enter manually instead
             </button>
           </div>
@@ -320,7 +320,7 @@ export default function UploadForm({
             </label>
             <button
               onClick={swapTeams}
-              className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-800"
+              className="btn btn-secondary"
             >
               ⇄ Swap teams
             </button>
@@ -403,7 +403,7 @@ export default function UploadForm({
                   )}
                 </tbody>
               </table>
-              <button className="px-3 py-2 text-xs text-zinc-400 hover:text-white"
+              <button className="btn btn-secondary btn-sm m-2"
                 onClick={() => setRows((rs) => [...rs!, blankRow(side)])}>+ Add row</button>
             </div>
           ))}
@@ -413,12 +413,12 @@ export default function UploadForm({
             <button
               onClick={save}
               disabled={!!busy}
-              className="rounded bg-rose-600 px-4 py-2 text-sm font-semibold hover:bg-rose-500 disabled:opacity-50"
+              className="btn btn-primary"
             >
               {busy === "saving" ? "Saving…" : "Save map"}
             </button>
             <button onClick={() => { setRows(null); setScreenshotPath(null); setPreview(null); }}
-              className="text-sm text-zinc-400 underline">Start over</button>
+              className="btn btn-secondary">Start over</button>
           </div>
 
           {preview && (

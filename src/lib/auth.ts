@@ -1,4 +1,5 @@
 import "server-only";
+import { discordOf, type DiscordId } from "./claims";
 import { supabaseAdmin, supabaseServer } from "./supabase";
 import type { Player } from "./types";
 
@@ -6,6 +7,8 @@ export type Viewer = {
   userId: string;
   email: string | null;
   isAdmin: boolean;
+  discord: DiscordId | null;
+  /** The profile this account has claimed. */
   player: Player | null;
   /** Admins, captains and players can all upload results. */
   canUpload: boolean;
@@ -41,6 +44,7 @@ export async function getViewer(): Promise<Viewer | null> {
     userId: user.id,
     email: user.email ?? null,
     isAdmin,
+    discord: discordOf(user),
     player: player ?? null,
     canUpload: isAdmin || !!player,
   };

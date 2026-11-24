@@ -55,6 +55,30 @@ export type RankResult =
     }
   | { status: "not_found" | "error"; error: string; retryAfterSec?: number };
 
+/** Does this Riot ID exist? Returns its permanent id and exact spelling. */
+export async function fetchAccount(
+  name: string,
+  tag: string,
+): Promise<{ ok: true; puuid: string; name: string; tag: string } | { ok: false; notFound: boolean; error: string }> {
+  const key = process.env.HENRIKDEV_API_KEY;
+  if (!key) return { ok: false, notFound: false, error: "HENRIKDEV_API_KEY is not set." };
+  const enc = encodeURIComponent;
+  try {
+    const res = await fetch(`${BASE}/valorant/v2/account/${enc(name)}/${enc(tag)}`, {
+      headers: { Authorization: key },
+      cache: "no-store",
+    });
+    const body = await res.json().catch(() => null);
+    if (res.ok && body?.data?.puuid) return { ok: true, puuid: body.data.puuid, name: body.data.name, tag: body.data.tag };
+    const code = body?.errors?.[0]?.code;
+    // 404 code 22 = account doesn't exist. Other 404s (e.g. "play a game first") mean it does.
+    if (res.status === 404 && code === 22) return { ok: false, notFound: true, error: "Account not found" };
+    return { ok: false, notFound: false, error: body?.errors?.[0]?.message ?? `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, notFound: false, error: (e as Error).message };
+  }
+}
+
 /** Look a player up by permanent account id if known (survives renames), else by Riot ID. */
 export async function fetchRank(opts: { puuid?: string | null; name: string; tag: string | null }): Promise<RankResult> {
   const key = process.env.HENRIKDEV_API_KEY;

@@ -59,8 +59,8 @@ export default function LoginPage() {
 
       <div className="border-t border-zinc-800 pt-4">
         {!showEmail ? (
-          <button onClick={() => setShowEmail(true)} className="text-sm text-zinc-400 underline hover:text-white">
-            No Discord? Use an email link instead
+          <button onClick={() => setShowEmail(true)} className="btn btn-secondary w-full">
+            No Discord? Sign in with an email link
           </button>
         ) : state === "sent" ? (
           <p className="text-sm text-zinc-300">Check {email} for a sign-in link. Open it in this same browser.</p>

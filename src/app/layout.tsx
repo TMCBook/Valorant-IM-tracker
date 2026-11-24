@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link href="/matches" className={link}>Matches</Link>
             <div className="ml-auto flex items-center gap-4">
               {viewer?.canUpload && (
-                <Link href="/upload" className="rounded bg-rose-600 px-3 py-1 font-semibold hover:bg-rose-500">
+                <Link href="/upload" className="btn btn-primary btn-sm">
                   Upload result
                 </Link>
               )}

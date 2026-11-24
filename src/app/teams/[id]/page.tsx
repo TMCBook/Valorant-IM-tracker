@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { RankLabel } from "@/components/Icons";
 import MatchList from "@/components/MatchList";
 import { pct, teamMap } from "@/lib/data";
+import { rankOrder } from "@/lib/henrik";
+import { currentRanks } from "@/lib/ranks";
+import { rankIcons } from "@/lib/valorant-assets";
 import { standings } from "@/lib/standings";
 import { supabasePublic } from "@/lib/supabase";
 import type { Career, Match } from "@/lib/types";
@@ -12,10 +16,12 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = supabasePublic();
-  const [teams, table, { data: roster }, { data: matches }] = await Promise.all([
+  const [teams, table, ranks, rankPng, { data: roster }, { data: matches }] = await Promise.all([
     teamMap(),
     standings(),
-    db.from("player_career").select("*").eq("team_id", id).order("avg_acs", { ascending: false, nullsFirst: false }),
+    currentRanks(),
+    rankIcons(),
+    db.from("player_career").select("*").eq("team_id", id).order("kd", { ascending: false, nullsFirst: false }),
     db.from("matches").select("*").or(`team_a_id.eq.${id},team_b_id.eq.${id}`)
       .order("scheduled_at", { ascending: false, nullsFirst: false }),
   ]);
@@ -39,14 +45,18 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         <h2 className="text-lg font-semibold">Roster</h2>
         <div className="card overflow-x-auto">
           <table className="stat-table">
-            <thead><tr><th>Player</th><th>Maps</th><th>Win %</th><th>ACS</th><th>K/D</th><th>FB</th></tr></thead>
+            <thead><tr><th>Player</th><th className="!text-left">Rank</th><th>Maps</th><th>Win %</th><th>ACS</th><th>K/D</th><th>FB</th></tr></thead>
             <tbody>
-              {((roster ?? []) as Career[]).map((p) => (
+              {/* Highest rank first; ties (and unranked) keep K/D order. */}
+              {((roster ?? []) as Career[])
+                .sort((a, b) => rankOrder(ranks.get(b.player_id)) - rankOrder(ranks.get(a.player_id)))
+                .map((p) => (
                 <tr key={p.player_id}>
                   <td>
                     <Link href={`/players/${p.player_id}`} className="hover:text-rose-400">{p.riot_name}</Link>
                     {p.is_captain && <span className="ml-1 text-xs text-amber-400">C</span>}
                   </td>
+                  <td className="!text-left"><RankLabel tier={ranks.get(p.player_id)} icons={rankPng} /></td>
                   <td>{p.maps}</td><td>{pct(p.wins, p.maps)}</td><td>{p.avg_acs ?? "–"}</td>
                   <td>{p.kd ?? "–"}</td><td>{p.first_bloods}</td>
                 </tr>

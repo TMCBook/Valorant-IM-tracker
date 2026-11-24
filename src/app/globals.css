@@ -27,3 +27,25 @@ body {
 .card {
   @apply rounded-lg border border-zinc-800 bg-zinc-900/50;
 }
+
+/* Buttons. Use on <button>, <a> or <Link>:
+   btn btn-primary    main action (rose)
+   btn btn-secondary  everything else (outlined)
+   btn btn-danger     destructive (delete, unlink)
+   add btn-sm for compact buttons inside tables/cards */
+.btn {
+  @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold
+    whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-sm {
+  @apply px-2.5 py-1 text-xs;
+}
+.btn-primary {
+  @apply bg-rose-600 text-white hover:bg-rose-500;
+}
+.btn-secondary {
+  @apply border border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800;
+}
+.btn-danger {
+  @apply border border-red-900/70 bg-transparent text-red-300 hover:bg-red-950;
+}

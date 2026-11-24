@@ -1,6 +1,6 @@
 // Cached ranked info per player, refreshed from HenrikDev.
-import { fetchRank } from "./henrik";
-import { supabaseAdmin } from "./supabase";
+import { fetchAccount, fetchRank } from "./henrik";
+import { supabaseAdmin, supabasePublic } from "./supabase";
 
 export type PlayerRank = {
   player_id: string;
@@ -18,6 +18,12 @@ export type PlayerRank = {
 
 export const RANK_MAX_AGE_HOURS = 12;
 
+/** Current rank name for every player that has one: player id → "Diamond 2". */
+export async function currentRanks() {
+  const { data } = await supabasePublic().from("player_ranks").select("player_id, current_tier").not("current_tier", "is", null);
+  return new Map((data ?? []).map((r) => [r.player_id as string, r.current_tier as string]));
+}
+
 export function isStale(rank: PlayerRank | null) {
   if (!rank) return true;
   return Date.now() - Date.parse(rank.fetched_at) > RANK_MAX_AGE_HOURS * 3_600_000;
@@ -31,6 +37,29 @@ export function formatSeason(short: string | null | undefined) {
   if (!short) return null;
   const m = /^([a-z]+)(\d+)a(\d+)$/i.exec(short.trim());
   return m ? `${m[1].toUpperCase()}${m[2]} Act ${m[3]}` : short.toUpperCase();
+}
+
+/**
+ * Change a player's Riot ID (after a rename, or to fix a typo). If a HenrikDev
+ * key is set, checks with Riot first that the ID exists and uses Riot's exact
+ * spelling, then reloads the rank. Throws a readable message on failure.
+ */
+export async function changeRiotId(playerId: string, rawName: string, rawTag: string) {
+  let name = rawName.trim(), tag = rawTag.trim().replace(/^#/, "");
+  if (!name || !tag) throw new Error("Enter the full Riot ID, like Name#TAG.");
+  let puuid: string | null = null;
+  if (process.env.HENRIKDEV_API_KEY) {
+    const acct = await fetchAccount(name, tag);
+    if (!acct.ok && acct.notFound) throw new Error(`Riot can't find ${name}#${tag}. Check the spelling and the #tag.`);
+    if (acct.ok) ({ puuid, name, tag } = acct);
+    // Any other error (rate limit, "play a game first"): save as typed, rank loads later.
+  }
+  const db = supabaseAdmin();
+  const { error } = await db.from("players").update({ riot_name: name, riot_tag: tag, puuid }).eq("id", playerId);
+  if (error) throw new Error(error.code === "23505" ? `Another player already has ${name}#${tag}.` : error.message);
+  await db.from("player_ranks").delete().eq("player_id", playerId);
+  const rank = process.env.HENRIKDEV_API_KEY ? await refreshPlayerRank(playerId) : null;
+  return { name, tag, rank };
 }
 
 /**

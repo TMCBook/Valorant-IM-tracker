@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getViewer } from "@/lib/auth";
 import { fmtDate } from "@/lib/data";
+import { headToHead } from "@/lib/h2h";
 import { screenshotUrl, supabasePublic } from "@/lib/supabase";
 import { riotId, type Match, type MatchMap, type Player, type StatLine, type Team } from "@/lib/types";
 import { CompleteToggle, DeleteMapButton } from "./MatchControls";
@@ -16,9 +17,10 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
   const { data: match } = await db.from("matches").select("*").eq("id", id).maybeSingle<Match>();
   if (!match) notFound();
 
-  const [viewer, agentPng, { data: teamRows }, { data: mapRows }] = await Promise.all([
+  const [viewer, agentPng, h2h, { data: teamRows }, { data: mapRows }] = await Promise.all([
     getViewer(),
     agentIcons(),
+    headToHead(match.team_a_id, match.team_b_id),
     db.from("teams").select("*").in("id", [match.team_a_id, match.team_b_id]),
     db.from("match_maps").select("*").eq("match_id", id).order("map_number"),
   ]);
@@ -53,13 +55,49 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         </div>
         {viewer?.canUpload && (
           <div className="flex gap-3 pt-2">
-            <Link href={`/upload?match=${id}`} className="rounded bg-rose-600 px-3 py-1 text-sm font-semibold hover:bg-rose-500">
+            <Link href={`/upload?match=${id}`} className="btn btn-primary">
               Upload a map
             </Link>
             <CompleteToggle matchId={id} completed={match.status === "completed"} />
           </div>
         )}
       </div>
+
+      <section className="card space-y-3 p-4">
+        <h2 className="font-semibold">Head to head</h2>
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <div className="flex items-baseline gap-3 text-xl font-bold">
+            <span className={h2h.seriesA > h2h.seriesB ? "text-white" : "text-zinc-400"}>{A?.name}</span>
+            <span className="tabular-nums">{h2h.seriesA} – {h2h.seriesB}</span>
+            <span className={h2h.seriesB > h2h.seriesA ? "text-white" : "text-zinc-400"}>{B?.name}</span>
+          </div>
+          <div className="text-sm tabular-nums text-zinc-400">
+            Series · maps {h2h.mapsA}–{h2h.mapsB} · rounds {h2h.roundsA}–{h2h.roundsB}
+          </div>
+        </div>
+        {h2h.meetings.length <= 1 ? (
+          <p className="text-sm text-zinc-500">First time these teams have played each other.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-800 text-sm">
+            {h2h.meetings.map((m) => {
+              const current = m.match.id === id;
+              const winnerName = m.winner === "a" ? A?.name : m.winner === "b" ? B?.name : null;
+              return (
+                <li key={m.match.id} className="flex items-center gap-3 py-2">
+                  <span className="w-28 text-zinc-500">{fmtDate(m.date)}</span>
+                  <span className="tabular-nums">{m.aMaps}–{m.bMaps}</span>
+                  <span className="text-zinc-400">{winnerName ? `${winnerName} won` : m.match.status === "completed" ? "Draw" : "In progress"}</span>
+                  {current ? (
+                    <span className="ml-auto rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">This match</span>
+                  ) : (
+                    <Link href={`/matches/${m.match.id}`} className="btn btn-secondary btn-sm ml-auto">View</Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       {!maps.length && <p className="text-zinc-500">No maps uploaded yet.</p>}
 
@@ -71,7 +109,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
             <div className="flex items-baseline gap-3">
               <h2 className="text-lg font-semibold">Map {m.map_number}{m.map_name ? ` · ${m.map_name}` : ""}</h2>
               <span className="tabular-nums text-zinc-400">{m.team_a_rounds}–{m.team_b_rounds}</span>
-              {shot && <a href={shot} target="_blank" className="text-xs text-zinc-500 underline hover:text-white">screenshot</a>}
+              {shot && <a href={shot} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">View screenshot</a>}
               {viewer?.isAdmin && <span className="ml-auto"><DeleteMapButton mapId={m.id} /></span>}
             </div>
             {[match.team_a_id, match.team_b_id].map((teamId) => {

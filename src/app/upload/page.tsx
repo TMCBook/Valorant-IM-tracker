@@ -15,15 +15,16 @@ export default async function UploadPage({
   if (!viewer) {
     return (
       <p>
-        <Link href="/login" className="text-rose-400 underline">Sign in</Link> to upload match results.
+        Sign in to upload match results.
+        <Link href="/login" className="btn btn-primary ml-3">Sign in</Link>
       </p>
     );
   }
   if (!viewer.canUpload) {
     return (
       <p>
-        Link your account to your player on the{" "}
-        <Link href="/account" className="text-rose-400 underline">Account page</Link> to upload results.
+        Claim your player profile to upload results.
+        <Link href="/account" className="btn btn-primary ml-3">Claim your profile</Link>
       </p>
     );
   }

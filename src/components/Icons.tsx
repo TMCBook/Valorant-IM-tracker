@@ -32,6 +32,17 @@ export function AgentLabel({ name, icons, size = 24 }: { name: string | null | u
   );
 }
 
+/** Small badge + rank name, for tables. "–" when the rank isn't known. */
+export function RankLabel({ tier, icons, size = 22 }: { tier: string | null | undefined; icons: IconMap; size?: number }) {
+  if (!tier) return <span className="text-zinc-600">–</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <RankIcon tier={tier} icons={icons} size={size} />
+      <span className="text-zinc-300">{tier}</span>
+    </span>
+  );
+}
+
 /** Rank badge (Iron 1 … Radiant). */
 export function RankIcon({ tier, icons, size = 56 }: { tier: string | null | undefined; icons: IconMap; size?: number }) {
   const src = icons[iconKey(tier)];
