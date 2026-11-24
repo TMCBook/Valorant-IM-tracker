@@ -54,7 +54,7 @@ export default function RankCard({
               <div className={`text-2xl font-bold ${color(rank.peak_tier)}`}>{rank.peak_tier}</div>
               <div className="text-sm text-zinc-400">
                 {formatSeason(rank.peak_season)}
-                {isImmortalPlus(rank.peak_tier_id) && rank.peak_rr != null && (
+                {isImmortalPlus(rank.peak_tier) && rank.peak_rr != null && (
                   <span className="tabular-nums"> · {rank.peak_rr} RR</span>
                 )}
               </div>

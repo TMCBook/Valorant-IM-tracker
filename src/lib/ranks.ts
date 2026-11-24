@@ -23,8 +23,8 @@ export function isStale(rank: PlayerRank | null) {
   return Date.now() - Date.parse(rank.fetched_at) > RANK_MAX_AGE_HOURS * 3_600_000;
 }
 
-/** Immortal 1 and up (tier ids 24–27): Riot shows RR as a leaderboard number there. */
-export const isImmortalPlus = (tierId: number | null | undefined) => (tierId ?? 0) >= 24;
+/** Immortal 1 and up. Checked by name: tier ids were renumbered in Episode 5. */
+export const isImmortalPlus = (tier: string | null | undefined) => /^(Immortal|Radiant)/.test(tier ?? "");
 
 /** "e9a3" → "E9 Act 3", "v25a1" → "V25 Act 1"; anything else uppercased. */
 export function formatSeason(short: string | null | undefined) {
