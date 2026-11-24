@@ -8,6 +8,7 @@ import { supabasePublic } from "@/lib/supabase";
 import type { Career, MapResult } from "@/lib/types";
 import { agentIcons, rankIcons } from "@/lib/valorant-assets";
 import { AgentIcon, AgentLabel } from "@/components/Icons";
+import { KdTrend, MapWinRates, type GamePoint, type MapRate } from "./Charts";
 import RankCard from "./RankCard";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,24 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     .filter(([name]) => name !== "Unknown")
     .sort((a, b) => b[1].maps - a[1].maps || b[1].k - a[1].k)
     .slice(0, 3);
+
+  // Chart data: maps oldest → newest, and record per map name.
+  const trend: GamePoint[] = [...history].reverse().map((g) => ({
+    date: fmtDate(g.played_at).replace(/, \d{4}$/, ""),
+    map: g.map_name ?? `Map ${g.map_number}`,
+    opponent: teams.get(g.opponent_team_id)?.name ?? "?",
+    agent: g.agent,
+    kills: g.kills, deaths: g.deaths, assists: g.assists,
+    won: g.won, score: `${g.rounds_won}–${g.rounds_lost}`,
+  }));
+  const byMap = new Map<string, MapRate>();
+  for (const g of history) {
+    const name = g.map_name ?? "Unknown";
+    const r = byMap.get(name) ?? { map: name, maps: 0, wins: 0, kills: 0, deaths: 0 };
+    r.maps++; if (g.won) r.wins++; r.kills += g.kills; r.deaths += g.deaths;
+    byMap.set(name, r);
+  }
+  const mapRates = [...byMap.values()].sort((a, b) => b.maps - a.maps || b.wins / b.maps - a.wins / a.maps);
 
   const tiles: [string, string | number][] = [
     ["Maps", career.maps],
@@ -115,6 +134,21 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           </div>
         ))}
       </div>
+
+      {history.length > 0 && (
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className="card p-4 lg:col-span-2">
+            <h2 className="font-semibold">K/D by map</h2>
+            <p className="mb-2 text-xs text-zinc-500">Each IM map, oldest to newest. Dashed line = 1.0 K/D. Hover a point for details.</p>
+            <KdTrend games={trend} />
+          </div>
+          <div className="card p-4">
+            <h2 className="font-semibold">Win rate by map</h2>
+            <p className="mb-4 text-xs text-zinc-500">Record on each map in IM games.</p>
+            <MapWinRates rows={mapRates} />
+          </div>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">All IM agents</h2>

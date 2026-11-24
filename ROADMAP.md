@@ -7,8 +7,8 @@ Ideas agreed on for later, roughly in priority order. Small UI fixes are being d
 2. **Season roster import on the Admin page.** Upload the season sign-up sheet (same layout as the FA26 Player Directory), preview the changes (new players, moved players, new #tags/Discords), then confirm.
 3. **Seasons.** Matches belong to a season (e.g. FA26); season picker on stats pages; career totals across seasons. Best added before the next season starts.
 4. **Group standings.** Store Group A / Group B per team and split the standings table.
-5. **Leaderboards page.** Most first bloods, best K/D per agent, most plants/defuses, etc.
-6. **Player page charts.** K/D trend over matches, win rate by map.
+5. ~~**Leaderboards page.**~~ Done. Most first bloods, best K/D per agent, most plants/defuses, etc.
+6. ~~**Player page charts.**~~ Done. K/D trend over matches, win rate by map.
 
 ## Smaller improvements
 - ~~Rank badges in the Players list and team rosters.~~ Done.
