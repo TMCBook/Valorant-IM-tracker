@@ -21,7 +21,7 @@ type Side = "ally" | "enemy";
 type Row = {
   side: Side;
   readName: string;
-  playerId: string; // "" = unset, "new" = create, "skip" = sub, not recorded
+  playerId: string; // "" = unset, "new" = create, "skip" = sub: saved by name, no profile
   newName: string;
   newTag: string;
   agent: string;
@@ -210,11 +210,15 @@ export default function UploadForm({
     const a = num(allyIsA ? allyRounds : enemyRounds);
     const b = num(allyIsA ? enemyRounds : allyRounds);
     if (a == null || b == null) return setError("Enter the round score for both teams.");
-    const kept = rows.filter((r) => r.playerId !== "skip");
-    if (kept.length < 2) return setError("At least two rostered players are needed to save a map.");
-    for (const r of kept) {
+    // Subs are saved on the scoreboard by name, but get no player profile.
+    const subName = (r: Row) => (r.readName || r.newName).trim();
+    if (rows.filter((r) => r.playerId !== "skip").length < 2) {
+      return setError("At least two rostered players are needed to save a map.");
+    }
+    for (const r of rows) {
       if (!r.playerId) return setError("Pick a player for every row.");
       if (r.playerId === "new" && !r.newName.trim()) return setError("New players need a name.");
+      if (r.playerId === "skip" && !subName(r)) return setError("Subs need a name.");
       if ([r.kills, r.deaths, r.assists].some((v) => num(v) == null)) {
         return setError(`K/D/A is missing for ${r.newName || r.readName || "a player"}.`);
       }
@@ -227,8 +231,9 @@ export default function UploadForm({
       teamBRounds: b,
       screenshotPath,
       seriesComplete,
-      rows: kept.map((r) => ({
-        playerId: r.playerId === "new" ? null : r.playerId,
+      rows: rows.map((r) => ({
+        playerId: r.playerId === "new" || r.playerId === "skip" ? null : r.playerId,
+        subName: r.playerId === "skip" ? subName(r) : null,
         newName: r.playerId === "new" ? r.newName.trim() : null,
         newTag: r.playerId === "new" ? r.newTag.trim() || null : null,
         teamId: teamFor(r.side),
@@ -355,7 +360,7 @@ export default function UploadForm({
                 <tbody>
                   {rows.map((r, i) =>
                     r.side !== side ? null : (
-                      <tr key={i} className={`border-t border-zinc-800 ${r.playerId === "skip" ? "opacity-40" : ""}`}>
+                      <tr key={i} className={`border-t border-zinc-800 ${r.playerId === "skip" ? "opacity-70" : ""}`}>
                         <td className="p-2">
                           {r.readName && <div className="text-xs text-zinc-500">read: {r.readName}</div>}
                           <select
@@ -367,10 +372,10 @@ export default function UploadForm({
                             {rosterFor(side).map((p) => (
                               <option key={p.id} value={p.id}>{p.riot_name}{p.riot_tag ? `#${p.riot_tag}` : ""}</option>
                             ))}
-                            <option value="skip">Sub (don&apos;t record)</option>
+                            <option value="skip">Sub (no profile)</option>
                             <option value="new">+ New player</option>
                           </select>
-                          {r.playerId === "new" && (
+                          {(r.playerId === "new" || (r.playerId === "skip" && !r.readName)) && (
                             <div className="mt-1 flex gap-1">
                               <input className={`${input} w-40`} placeholder="Name" value={r.newName}
                                 onChange={(e) => update(i, { newName: e.target.value })} />

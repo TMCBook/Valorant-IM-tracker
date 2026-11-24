@@ -40,7 +40,8 @@ export type MatchMap = {
 export type StatLine = {
   id: string;
   match_map_id: string;
-  player_id: string;
+  player_id: string | null; // null = a sub (see sub_name): shown on scoreboards, no profile
+  sub_name: string | null;
   team_id: string;
   agent: string | null;
   acs: number | null;

@@ -15,7 +15,8 @@
     "agents:3": "node --import tsx scripts/agent-match/03-prepare.mts",
     "agents:4": "node --import tsx scripts/agent-match/04-score.mts",
     "agents:5": "node --import tsx scripts/agent-match/05-check.mts",
-    "fix-agents": "node --env-file-if-exists=.env.local --import tsx scripts/fix-agents.mts"
+    "fix-agents": "node --env-file-if-exists=.env.local --import tsx scripts/fix-agents.mts",
+    "backfill-subs": "node --env-file-if-exists=.env.local --import tsx scripts/backfill-subs.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",

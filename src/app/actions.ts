@@ -25,6 +25,8 @@ const SaveMapInput = z.object({
     .array(
       z.object({
         playerId: z.string().uuid().nullable(),
+        // A sub: saved on the scoreboard under this name, with no player profile.
+        subName: z.string().trim().min(1).max(40).nullable().optional(),
         newName: z.string().trim().max(32).nullable(),
         newTag: z.string().trim().max(8).nullable(),
         teamId: z.string().uuid(),
@@ -55,9 +57,14 @@ export async function saveMatchMap(raw: SaveMapInput): Promise<ActionResult> {
     const teamIds = [match.team_a_id, match.team_b_id];
 
     // Resolve players, creating any new ones on the team they played for.
-    const playerIds: string[] = [];
+    // Subs get no player (null) and are stored by name only.
+    const playerIds: (string | null)[] = [];
     for (const row of input.rows) {
       if (!teamIds.includes(row.teamId)) throw new Error("A row has a team not in this match.");
+      if (row.subName) {
+        playerIds.push(null);
+        continue;
+      }
       if (row.playerId) {
         playerIds.push(row.playerId);
         continue;
@@ -82,7 +89,8 @@ export async function saveMatchMap(raw: SaveMapInput): Promise<ActionResult> {
       if (error) throw new Error(`Couldn't add ${row.newName}: ${error.message}`);
       playerIds.push(created.id);
     }
-    if (new Set(playerIds).size !== playerIds.length) {
+    const real = playerIds.filter(Boolean);
+    if (new Set(real).size !== real.length) {
       throw new Error("The same player is selected on two rows.");
     }
 
@@ -111,6 +119,7 @@ export async function saveMatchMap(raw: SaveMapInput): Promise<ActionResult> {
       input.rows.map((r, i) => ({
         match_map_id: map.id,
         player_id: playerIds[i],
+        sub_name: playerIds[i] ? null : r.subName,
         team_id: r.teamId,
         agent: r.agent || null,
         acs: r.acs,

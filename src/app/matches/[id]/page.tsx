@@ -24,8 +24,9 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
     ? await db.from("player_map_stats").select("*").in("match_map_id", maps.map((m) => m.id))
     : { data: [] };
   const stats = (statRows ?? []) as StatLine[];
-  const { data: playerRows } = stats.length
-    ? await db.from("players").select("*").in("id", stats.map((s) => s.player_id))
+  const playerIds = stats.flatMap((s) => (s.player_id ? [s.player_id] : [])); // subs have none
+  const { data: playerRows } = playerIds.length
+    ? await db.from("players").select("*").in("id", playerIds)
     : { data: [] };
 
   const teams = new Map(((teamRows ?? []) as Team[]).map((t) => [t.id, t]));
@@ -72,7 +73,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
             </div>
             {[match.team_a_id, match.team_b_id].map((teamId) => {
               const won = teamId === match.team_a_id ? m.team_a_rounds > m.team_b_rounds : m.team_b_rounds > m.team_a_rounds;
-              const rows = lines.filter((s) => s.team_id === teamId).sort((x, y) => (y.acs ?? 0) - (x.acs ?? 0));
+              const rows = lines.filter((s) => s.team_id === teamId).sort((x, y) => (y.acs ?? 0) - (x.acs ?? 0) || y.kills - x.kills);
               return (
                 <div key={teamId} className="card overflow-x-auto">
                   <div className={`px-3 pt-2 text-sm font-semibold ${won ? "text-teal-400" : "text-red-400"}`}>
@@ -82,11 +83,20 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
                     <thead><tr><th>Player</th><th className="!text-left">Agent</th><th>ACS</th><th>K</th><th>D</th><th>A</th><th>+/-</th><th>Econ</th><th>FB</th><th>Pl</th><th>Df</th></tr></thead>
                     <tbody>
                       {rows.map((s) => {
-                        const p = players.get(s.player_id);
+                        const p = s.player_id ? players.get(s.player_id) : null;
                         const diff = s.kills - s.deaths;
                         return (
                           <tr key={s.id}>
-                            <td><Link href={`/players/${s.player_id}`} className="hover:text-rose-400">{p ? riotId(p) : "?"}</Link></td>
+                            <td>
+                              {s.player_id ? (
+                                <Link href={`/players/${s.player_id}`} className="hover:text-rose-400">{p ? riotId(p) : "?"}</Link>
+                              ) : (
+                                <span className="text-zinc-300">
+                                  {s.sub_name}
+                                  <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">sub</span>
+                                </span>
+                              )}
+                            </td>
                             <td className="!text-left">{s.agent ?? "–"}</td>
                             <td>{s.acs ?? "–"}</td><td>{s.kills}</td><td>{s.deaths}</td><td>{s.assists}</td>
                             <td className={diff > 0 ? "text-teal-400" : diff < 0 ? "text-red-400" : ""}>{diff > 0 ? "+" : ""}{diff}</td>

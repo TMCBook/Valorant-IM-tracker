@@ -6,7 +6,7 @@
 // Each screenshot is read once with Claude and cached in .import-cache/, so
 // re-running (including --commit after a dry run) doesn't pay again.
 // Teams are worked out from roster names; players not on the team's roster
-// are treated as subs and not recorded. Screenshots of the same two teams on
+// are saved as subs: on the scoreboard, no player profile. Screenshots of the same two teams on
 // the same date become one series, ordered by file time.
 
 import { createClient } from "@supabase/supabase-js";
@@ -165,7 +165,7 @@ for (const maps of series.values()) {
   maps.forEach((m, i) => {
     const s = [...subs(m, "ally"), ...subs(m, "enemy")];
     console.log(`   Map ${i + 1} ${m.p.map ?? "?"}: ${m.team.ally.name} ${m.p.ally_rounds}–${m.p.enemy_rounds} ${m.team.enemy.name}` +
-      `  [${m.shot.name}]${s.length ? `  subs skipped: ${s.join(", ")}` : ""}`);
+      `  [${m.shot.name}]${s.length ? `  subs (no profile): ${s.join(", ")}` : ""}`);
   });
 }
 // Possible renamed players: a roster member who never shows up for their team,
@@ -235,13 +235,15 @@ for (const maps of series.values()) {
     if (error) throw error;
 
     const rows = (["ally", "enemy"] as const).flatMap((side) =>
-      m.p.players.filter((x) => x.side === side).flatMap((x, i) => {
+      m.p.players.filter((x) => x.side === side).map((x, i) => {
         const pid = m.ids[side][i];
-        return pid ? [{
-          match_map_id: map.id, player_id: pid, team_id: m.team[side].id, agent: x.agent, acs: x.acs,
+        // Subs (not on this team's roster) are kept by name, with no player profile.
+        return {
+          match_map_id: map.id, player_id: pid, sub_name: pid ? null : x.name,
+          team_id: m.team[side].id, agent: x.agent, acs: x.acs,
           kills: x.kills, deaths: x.deaths, assists: x.assists, econ: x.econ,
           first_bloods: x.first_bloods, plants: x.plants, defuses: x.defuses,
-        }] : [];
+        };
       }),
     );
     const { error: sErr } = await db.from("player_map_stats").insert(rows);

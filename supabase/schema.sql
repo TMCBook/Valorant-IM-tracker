@@ -171,3 +171,11 @@ drop policy if exists "public read" on player_ranks;
 create policy "public read" on player_ranks for select using (true);
 grant select on player_ranks to anon, authenticated;
 grant all on player_ranks to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Subs (also in migrations/003_subs.sql): stat lines without a player profile
+alter table player_map_stats alter column player_id drop not null;
+alter table player_map_stats add column if not exists sub_name text;
+alter table player_map_stats drop constraint if exists player_or_sub;
+alter table player_map_stats add constraint player_or_sub
+  check (player_id is not null or sub_name is not null);

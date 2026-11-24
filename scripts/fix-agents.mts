@@ -38,9 +38,9 @@ for (const m of maps!) {
   // This map's stat lines with their player names.
   const { data: lines } = await db
     .from("player_map_stats")
-    .select("id, agent, players(riot_name)")
+    .select("id, agent, sub_name, players(riot_name)")
     .eq("match_map_id", m.id);
-  const named = lines!.map((l) => ({ id: l.id, agent: l.agent as string | null, riot_name: (l.players as unknown as { riot_name: string }).riot_name }));
+  const named = lines!.map((l) => ({ id: l.id, agent: l.agent as string | null, riot_name: (l.players as unknown as { riot_name: string } | null)?.riot_name ?? (l.sub_name as string) }));
   // Pair screenshot names with stat lines (each line used at most once).
   const pairs = matchNames(parsed.players.map((p) => p.name), named);
 
