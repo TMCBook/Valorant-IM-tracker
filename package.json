@@ -8,7 +8,14 @@
     "start": "next start",
     "lint": "eslint",
     "test:scoreboard": "node --env-file-if-exists=.env.local --import tsx scripts/test-scoreboard.mts",
-    "bulk-import": "node --env-file-if-exists=.env.local --import tsx scripts/bulk-import.mts"
+    "bulk-import": "node --env-file-if-exists=.env.local --import tsx scripts/bulk-import.mts",
+    "refresh-ranks": "node --env-file-if-exists=.env.local --import tsx scripts/refresh-ranks.mts",
+    "agents:1": "node --import tsx scripts/agent-match/01-download-icons.mts",
+    "agents:2": "node --import tsx scripts/agent-match/02-crop-portraits.mts",
+    "agents:3": "node --import tsx scripts/agent-match/03-prepare.mts",
+    "agents:4": "node --import tsx scripts/agent-match/04-score.mts",
+    "agents:5": "node --import tsx scripts/agent-match/05-check.mts",
+    "fix-agents": "node --env-file-if-exists=.env.local --import tsx scripts/fix-agents.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",

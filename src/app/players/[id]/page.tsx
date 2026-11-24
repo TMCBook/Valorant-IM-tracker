@@ -1,21 +1,34 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
+import { getViewer } from "@/lib/auth";
 import { fmtDate, kd, pct, teamMap } from "@/lib/data";
+import { isStale, refreshPlayerRank, type PlayerRank } from "@/lib/ranks";
 import { supabasePublic } from "@/lib/supabase";
-import { riotId, type Career, type MapResult } from "@/lib/types";
+import type { Career, MapResult } from "@/lib/types";
+import RankCard from "./RankCard";
 
 export const dynamic = "force-dynamic";
 
 export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = supabasePublic();
-  const [teams, { data: career }, { data: games }] = await Promise.all([
+  const [teams, viewer, { data: career }, { data: games }, { data: rank }] = await Promise.all([
     teamMap(),
+    getViewer(),
     db.from("player_career").select("*").eq("player_id", id).maybeSingle<Career>(),
     db.from("player_map_results").select("*").eq("player_id", id).order("played_at", { ascending: false }),
+    db.from("player_ranks").select("*").eq("player_id", id).maybeSingle<PlayerRank>(),
   ]);
   if (!career) notFound();
   const history = (games ?? []) as MapResult[];
+
+  // Keep ranks fresh without a scheduler: if this one is old, refresh it after
+  // the page is sent. The next visit shows the new rank.
+  if (career.riot_tag && process.env.HENRIKDEV_API_KEY && isStale(rank ?? null)) {
+    after(() => refreshPlayerRank(id).catch((e) => console.error("rank refresh failed", e)));
+  }
 
   // Per-agent breakdown.
   const agents = new Map<string, { maps: number; wins: number; k: number; d: number; acs: number[] }>();
@@ -31,27 +44,59 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   }
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((s, x) => s + x, 0) / xs.length) : null);
   const last5 = history.slice(0, 5);
+  const sum = (xs: MapResult[], k: "kills" | "deaths") => xs.reduce((s, g) => s + g[k], 0);
+  const mains = [...agents.entries()]
+    .filter(([name]) => name !== "Unknown")
+    .sort((a, b) => b[1].maps - a[1].maps || b[1].k - a[1].k)
+    .slice(0, 3);
 
   const tiles: [string, string | number][] = [
     ["Maps", career.maps],
     ["Win rate", pct(career.wins, career.maps)],
-    ["Avg ACS", career.avg_acs ?? "–"],
     ["K/D", career.kd ?? "–"],
-    ["Last 5 ACS", avg(last5.flatMap((g) => (g.acs == null ? [] : [g.acs]))) ?? "–"],
+    ["Last 5 K/D", last5.length ? kd(sum(last5, "kills"), sum(last5, "deaths")) : "–"],
+    ["Kills / map", career.maps ? (career.kills / career.maps).toFixed(1) : "–"],
     ["First bloods", career.first_bloods],
   ];
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">{riotId(career)}</h1>
-        <p className="text-zinc-400">
-          {career.team_id ? (
-            <Link href={`/teams/${career.team_id}`} className="hover:text-white">{teams.get(career.team_id)?.name}</Link>
-          ) : "Free agent"}
-          {career.is_captain && " · Captain"}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-bold">
+            {career.riot_name}
+            {career.riot_tag && <span className="font-normal text-zinc-500">#{career.riot_tag}</span>}
+          </h1>
+          <p className="text-zinc-400">
+            {career.team_id ? (
+              <Link href={`/teams/${career.team_id}`} className="hover:text-white">{teams.get(career.team_id)?.name}</Link>
+            ) : "Free agent"}
+            {career.is_captain && " · Captain"}
+          </p>
+        </div>
+        <RankCard rank={rank ?? null} playerId={id} hasTag={!!career.riot_tag} isAdmin={!!viewer?.isAdmin} />
       </div>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">IM mains</h2>
+        {mains.length ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {mains.map(([name, a], i) => (
+              <div key={name} className="card p-4">
+                <div className="text-xs text-zinc-500">#{i + 1}</div>
+                <div className="text-xl font-semibold">{name}</div>
+                <div className="mt-2 flex gap-4 text-sm tabular-nums text-zinc-400">
+                  <span><span className="text-lg font-semibold text-zinc-100">{kd(a.k, a.d)}</span> K/D</span>
+                  <span>{a.maps} {a.maps === 1 ? "map" : "maps"}</span>
+                  <span>{pct(a.wins, a.maps)} W</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">No agents recorded in IM games yet.</p>
+        )}
+      </section>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map(([label, value]) => (
@@ -63,7 +108,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Agents</h2>
+        <h2 className="text-lg font-semibold">All IM agents</h2>
         <div className="card overflow-x-auto">
           <table className="stat-table">
             <thead><tr><th>Agent</th><th>Maps</th><th>Win %</th><th>ACS</th><th>K/D</th></tr></thead>

@@ -9,8 +9,8 @@ import type { Match, Player, Team } from "@/lib/types";
 
 const AGENTS = [
   "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher", "Deadlock", "Fade", "Gekko",
-  "Harbor", "Iso", "Jett", "KAY/O", "Killjoy", "Neon", "Omen", "Phoenix", "Raze", "Reyna",
-  "Sage", "Skye", "Sova", "Tejo", "Vyse", "Viper", "Waylay", "Yoru",
+  "Harbor", "Hush", "Iso", "Jett", "KAY/O", "Killjoy", "Miks", "Neon", "Omen", "Phoenix", "Raze",
+  "Reyna", "Sage", "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru",
 ];
 const MAPS = [
   "Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus",
@@ -49,9 +49,15 @@ const NUM_FIELDS = [
 const str = (n: number | null | undefined) => (n == null ? "" : String(n));
 const num = (s: string) => (s.trim() === "" ? null : Number.parseInt(s, 10));
 
-/** Shrink big phone photos so uploads stay fast and under size limits. */
+/**
+ * Shrink big phone photos so uploads stay fast and under size limits.
+ * Normal PC screenshots are sent untouched: re-saving as JPEG blurs colors,
+ * which makes the small agent portraits harder to identify.
+ */
 async function shrinkImage(file: File): Promise<Blob> {
   const bmp = await createImageBitmap(file);
+  const fine = ["image/png", "image/jpeg", "image/webp"].includes(file.type);
+  if (fine && file.size <= 3.5 * 1024 * 1024 && Math.max(bmp.width, bmp.height) <= 2600) return file;
   const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bmp.width * scale);
@@ -155,7 +161,8 @@ export default function UploadForm({
       const blob = await shrinkImage(file);
       setPreview(URL.createObjectURL(blob));
       const fd = new FormData();
-      fd.append("file", new File([blob], "scoreboard.jpg", { type: "image/jpeg" }));
+      const type = blob.type || "image/jpeg";
+      fd.append("file", new File([blob], `scoreboard.${type.split("/")[1]}`, { type }));
       fd.append("matchId", matchId);
       const res = await fetch("/api/parse-scoreboard", { method: "POST", body: fd });
       const data = await res.json();

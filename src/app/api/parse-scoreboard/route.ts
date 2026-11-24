@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUploader } from "@/lib/auth";
+import { withMatchedAgents } from "@/lib/agents/match";
 import { parseScoreboard } from "@/lib/scoreboard";
 import { screenshotUrl, supabaseAdmin } from "@/lib/supabase";
 
@@ -40,7 +41,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const parsed = await parseScoreboard(bytes.toString("base64"), file.type as ImageType);
+    // Claude reads names, numbers and score; the template matcher identifies
+    // agents from their portraits (more accurate, and knows new agents).
+    const parsed = await withMatchedAgents(
+      bytes,
+      await parseScoreboard(bytes.toString("base64"), file.type as ImageType),
+    );
     return NextResponse.json({ screenshotPath: path, screenshotUrl: screenshotUrl(path), parsed });
   } catch (e) {
     console.error("parseScoreboard failed", e);

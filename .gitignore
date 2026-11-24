@@ -43,3 +43,6 @@ next-env.d.ts
 
 # screenshot import cache
 /.import-cache
+
+# agent matcher downloads and debug images
+/scripts/agent-match/data

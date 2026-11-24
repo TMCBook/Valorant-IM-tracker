@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
+import { withMatchedAgents } from "../src/lib/agents/match";
 import { matchNames } from "../src/lib/names";
 import { parseScoreboard, type ParsedScoreboard } from "../src/lib/scoreboard";
 
@@ -71,7 +72,18 @@ async function worker() {
   }
 }
 await Promise.all([1, 2, 3, 4].map(worker));
-console.log(`\nRead ${shots.length} screenshots.\n`);
+console.log(`\nRead ${shots.length} screenshots.`);
+
+// Agents come from the template matcher, not Claude (see scripts/agent-match/).
+// The cache keeps Claude's raw reading; this replaces only the agent field.
+let matched = 0;
+for (const s of shots) {
+  if (!s.parsed) continue;
+  const before = s.parsed;
+  s.parsed = await withMatchedAgents(s.bytes, s.parsed);
+  if (s.parsed !== before) matched++;
+}
+console.log(`Identified agents from portraits on ${matched} of ${shots.length} screenshots.\n`);
 
 // ---------- 2. Work out teams for each screenshot ----------
 type Side = "ally" | "enemy";

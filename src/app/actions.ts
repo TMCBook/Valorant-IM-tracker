@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import * as z from "zod";
 import { getViewer, requireAdmin, requireUploader } from "@/lib/auth";
 import { syncChallonge } from "@/lib/challonge";
+import { refreshPlayerRank } from "@/lib/ranks";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase";
 
 export type ActionResult = { ok: true; message?: string; id?: string } | { ok: false; error: string };
@@ -239,6 +240,47 @@ export async function addPlayerAction(_: ActionResult | null, form: FormData): P
     if (error) throw new Error(error.message);
     revalidatePath("/", "layout");
     return { ok: true, message: `Saved ${name}${tag ? `#${tag}` : ""}.` };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function refreshRankAction(playerId: string): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const r = await refreshPlayerRank(playerId);
+    revalidatePath(`/players/${playerId}`);
+    if (r.status === "error") throw new Error(r.error);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Correct a player's Riot ID (e.g. after a name change) and reload their rank. */
+export async function fixRiotIdAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const playerId = String(form.get("playerId") ?? "");
+    const [name, tag] = String(form.get("riotId") ?? "").split("#").map((s) => s.trim());
+    if (!playerId) throw new Error("Pick a player.");
+    if (!name || !tag) throw new Error("Enter the full Riot ID, like Name#TAG.");
+    const db = supabaseAdmin();
+    const { error } = await db
+      .from("players")
+      .update({ riot_name: name, riot_tag: tag, puuid: null })
+      .eq("id", playerId);
+    if (error) throw new Error(error.code === "23505" ? "Another player already has that Riot ID." : error.message);
+    await db.from("player_ranks").delete().eq("player_id", playerId);
+    const r = process.env.HENRIKDEV_API_KEY ? await refreshPlayerRank(playerId) : null;
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      message:
+        !r ? `Saved ${name}#${tag}.`
+        : r.status === "ok" ? `Saved ${name}#${tag}: ${r.current?.tier ?? "unrated"}.`
+        : `Saved ${name}#${tag}, but the rank lookup said: ${"error" in r ? r.error : r.status}.`,
+    };
   } catch (e) {
     return fail(e);
   }
