@@ -6,6 +6,8 @@ import { fmtDate, kd, pct, teamMap } from "@/lib/data";
 import { isStale, refreshPlayerRank, type PlayerRank } from "@/lib/ranks";
 import { supabasePublic } from "@/lib/supabase";
 import type { Career, MapResult } from "@/lib/types";
+import { agentIcons, rankIcons } from "@/lib/valorant-assets";
+import { AgentIcon, AgentLabel } from "@/components/Icons";
 import RankCard from "./RankCard";
 
 export const dynamic = "force-dynamic";
@@ -14,9 +16,11 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = supabasePublic();
-  const [teams, viewer, { data: career }, { data: games }, { data: rank }] = await Promise.all([
+  const [teams, viewer, agentPng, rankPng, { data: career }, { data: games }, { data: rank }] = await Promise.all([
     teamMap(),
     getViewer(),
+    agentIcons(),
+    rankIcons(),
     db.from("player_career").select("*").eq("player_id", id).maybeSingle<Career>(),
     db.from("player_map_results").select("*").eq("player_id", id).order("played_at", { ascending: false }),
     db.from("player_ranks").select("*").eq("player_id", id).maybeSingle<PlayerRank>(),
@@ -74,7 +78,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             {career.is_captain && " · Captain"}
           </p>
         </div>
-        <RankCard rank={rank ?? null} playerId={id} hasTag={!!career.riot_tag} isAdmin={!!viewer?.isAdmin} />
+        <RankCard rank={rank ?? null} playerId={id} hasTag={!!career.riot_tag} isAdmin={!!viewer?.isAdmin} icons={rankPng} />
       </div>
 
       <section className="space-y-2">
@@ -83,9 +87,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <div className="grid gap-3 sm:grid-cols-3">
             {mains.map(([name, a], i) => (
               <div key={name} className="card p-4">
-                <div className="text-xs text-zinc-500">#{i + 1}</div>
-                <div className="text-xl font-semibold">{name}</div>
-                <div className="mt-2 flex gap-4 text-sm tabular-nums text-zinc-400">
+                <div className="flex items-center gap-3">
+                  <AgentIcon name={name} icons={agentPng} size={56} />
+                  <div>
+                    <div className="text-xs text-zinc-500">#{i + 1}</div>
+                    <div className="text-xl font-semibold">{name}</div>
+                  </div>
+                </div>
+                <div className="mt-3 flex gap-4 text-sm tabular-nums text-zinc-400">
                   <span><span className="text-lg font-semibold text-zinc-100">{kd(a.k, a.d)}</span> K/D</span>
                   <span>{a.maps} {a.maps === 1 ? "map" : "maps"}</span>
                   <span>{pct(a.wins, a.maps)} W</span>
@@ -115,7 +124,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <tbody>
               {[...agents.entries()].sort((a, b) => b[1].maps - a[1].maps).map(([name, a]) => (
                 <tr key={name}>
-                  <td>{name}</td><td>{a.maps}</td><td>{pct(a.wins, a.maps)}</td>
+                  <td><AgentLabel name={name === "Unknown" ? null : name} icons={agentPng} /></td><td>{a.maps}</td><td>{pct(a.wins, a.maps)}</td>
                   <td>{avg(a.acs) ?? "–"}</td><td>{kd(a.k, a.d)}</td>
                 </tr>
               ))}
@@ -146,7 +155,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                   <td className={g.won ? "text-teal-400" : "text-red-400"}>
                     {g.won ? "W" : "L"} {g.rounds_won}–{g.rounds_lost}
                   </td>
-                  <td className="!text-left">{g.agent ?? "–"}</td>
+                  <td className="!text-left"><AgentLabel name={g.agent} icons={agentPng} size={22} /></td>
                   <td>{g.acs ?? "–"}</td>
                   <td>{g.kills} / {g.deaths} / {g.assists}</td>
                   <td>{g.econ ?? "–"}</td>

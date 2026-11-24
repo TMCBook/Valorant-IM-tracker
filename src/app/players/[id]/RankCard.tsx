@@ -1,4 +1,6 @@
 import { formatSeason, isImmortalPlus, type PlayerRank } from "@/lib/ranks";
+import { RankIcon } from "@/components/Icons";
+import type { IconMap } from "@/lib/valorant-assets";
 import RefreshRankButton from "./RefreshRankButton";
 
 // Text color per rank family (Iron … Radiant).
@@ -20,11 +22,13 @@ export default function RankCard({
   playerId,
   hasTag,
   isAdmin,
+  icons,
 }: {
   rank: PlayerRank | null;
   playerId: string;
   hasTag: boolean;
   isAdmin: boolean;
+  icons: IconMap;
 }) {
   let body: React.ReactNode;
   if (!rank) {
@@ -34,35 +38,30 @@ export default function RankCard({
   } else if (rank.status === "error") {
     body = <p className="text-sm text-zinc-500">Rank unavailable right now.</p>;
   } else {
+    const slot = (label: string, tier: string | null, sub: React.ReactNode, empty: string) => (
+      <div>
+        <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
+        <div className="mt-1 flex items-center gap-3">
+          {tier ? <RankIcon tier={tier} icons={icons} size={56} /> : <div className="h-14 w-14 rounded-full bg-zinc-800" />}
+          <div>
+            <div className={`text-xl font-bold leading-tight ${tier ? color(tier) : "text-zinc-500"}`}>{tier ?? empty}</div>
+            {tier && <div className="text-sm tabular-nums text-zinc-400">{sub}</div>}
+          </div>
+        </div>
+      </div>
+    );
     body = (
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Current</div>
-          {rank.current_tier ? (
-            <>
-              <div className={`text-2xl font-bold ${color(rank.current_tier)}`}>{rank.current_tier}</div>
-              <div className="text-sm tabular-nums text-zinc-400">{rank.current_rr} RR</div>
-            </>
-          ) : (
-            <div className="text-2xl font-bold text-zinc-500">Unranked</div>
-          )}
-        </div>
-        <div>
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Peak</div>
-          {rank.peak_tier ? (
-            <>
-              <div className={`text-2xl font-bold ${color(rank.peak_tier)}`}>{rank.peak_tier}</div>
-              <div className="text-sm text-zinc-400">
-                {formatSeason(rank.peak_season)}
-                {isImmortalPlus(rank.peak_tier) && rank.peak_rr != null && (
-                  <span className="tabular-nums"> · {rank.peak_rr} RR</span>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="text-2xl font-bold text-zinc-500">–</div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {slot("Current", rank.current_tier, `${rank.current_rr} RR`, "Unranked")}
+        {slot(
+          "Peak",
+          rank.peak_tier,
+          <>
+            {formatSeason(rank.peak_season)}
+            {isImmortalPlus(rank.peak_tier) && rank.peak_rr != null && <> · {rank.peak_rr} RR</>}
+          </>,
+          "–",
+        )}
       </div>
     );
   }

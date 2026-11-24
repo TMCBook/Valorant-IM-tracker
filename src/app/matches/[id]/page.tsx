@@ -5,6 +5,8 @@ import { fmtDate } from "@/lib/data";
 import { screenshotUrl, supabasePublic } from "@/lib/supabase";
 import { riotId, type Match, type MatchMap, type Player, type StatLine, type Team } from "@/lib/types";
 import { CompleteToggle, DeleteMapButton } from "./MatchControls";
+import { AgentLabel } from "@/components/Icons";
+import { agentIcons } from "@/lib/valorant-assets";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +16,9 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
   const { data: match } = await db.from("matches").select("*").eq("id", id).maybeSingle<Match>();
   if (!match) notFound();
 
-  const [viewer, { data: teamRows }, { data: mapRows }] = await Promise.all([
+  const [viewer, agentPng, { data: teamRows }, { data: mapRows }] = await Promise.all([
     getViewer(),
+    agentIcons(),
     db.from("teams").select("*").in("id", [match.team_a_id, match.team_b_id]),
     db.from("match_maps").select("*").eq("match_id", id).order("map_number"),
   ]);
@@ -97,7 +100,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
                                 </span>
                               )}
                             </td>
-                            <td className="!text-left">{s.agent ?? "–"}</td>
+                            <td className="!text-left"><AgentLabel name={s.agent} icons={agentPng} size={24} /></td>
                             <td>{s.acs ?? "–"}</td><td>{s.kills}</td><td>{s.deaths}</td><td>{s.assists}</td>
                             <td className={diff > 0 ? "text-teal-400" : diff < 0 ? "text-red-400" : ""}>{diff > 0 ? "+" : ""}{diff}</td>
                             <td>{s.econ ?? "–"}</td><td>{s.first_bloods ?? "–"}</td><td>{s.plants ?? "–"}</td><td>{s.defuses ?? "–"}</td>
