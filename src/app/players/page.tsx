@@ -3,6 +3,7 @@ import { RankLabel } from "@/components/Icons";
 import { pct, teamMap } from "@/lib/data";
 import { rankOrder } from "@/lib/henrik";
 import { currentRanks } from "@/lib/ranks";
+import { NO_SEASON, seasonContext } from "@/lib/season";
 import { supabasePublic } from "@/lib/supabase";
 import type { Career } from "@/lib/types";
 import { rankIcons } from "@/lib/valorant-assets";
@@ -33,13 +34,15 @@ export default async function PlayersPage({
   const sort: SortKey = COLS.some(([k]) => k === raw) ? (raw as SortKey) : "kd";
   // Rank isn't a database column of the stats view, so that sort happens below.
   const dbSort = sort === "rank" ? "kd" : sort;
+  const sid = (await seasonContext()).selected?.id ?? NO_SEASON;
   const [teams, ranks, rankPng, { data }] = await Promise.all([
     teamMap(),
     currentRanks(),
     rankIcons(),
     supabasePublic()
-      .from("player_career")
+      .from("player_season_career") // this season's roster and stats
       .select("*")
+      .eq("season_id", sid)
       .order(dbSort, { ascending: dbSort === "deaths", nullsFirst: false })
       .order("riot_name"),
   ]);

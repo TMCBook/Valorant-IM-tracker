@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { getViewer } from "@/lib/auth";
 import { fmtDate, kd, pct, teamMap } from "@/lib/data";
 import { isStale, refreshPlayerRank, type PlayerRank } from "@/lib/ranks";
+import { allSeasons } from "@/lib/season";
 import { supabasePublic } from "@/lib/supabase";
 import type { Career, MapResult } from "@/lib/types";
 import { agentIcons, rankIcons } from "@/lib/valorant-assets";
@@ -28,6 +29,15 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   ]);
   if (!career) notFound();
   const history = (games ?? []) as MapResult[];
+  // One row per season this player was rostered (career totals above cover all seasons).
+  const [seasons, { data: bySeasonRows }] = await Promise.all([
+    allSeasons(),
+    db.from("player_season_career").select("*").eq("player_id", id),
+  ]);
+  const seasonName = new Map(seasons.map((s) => [s.id, s.name]));
+  const bySeason = ((bySeasonRows ?? []) as (Career & { season_id: string })[]).sort(
+    (a, b) => seasons.findIndex((s) => s.id === a.season_id) - seasons.findIndex((s) => s.id === b.season_id),
+  );
 
   // Keep ranks fresh without a scheduler: if this one is old, refresh it after
   // the page is sent. The next visit shows the new rank.
@@ -146,6 +156,26 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <h2 className="font-semibold">Win rate by map</h2>
             <p className="mb-4 text-xs text-zinc-500">Record on each map in IM games.</p>
             <MapWinRates rows={mapRates} />
+          </div>
+        </section>
+      )}
+
+      {bySeason.length > 1 && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">By season</h2>
+          <div className="card overflow-x-auto">
+            <table className="stat-table">
+              <thead><tr><th>Season</th><th className="!text-left">Team</th><th>Maps</th><th>Win %</th><th>K/D</th><th>FB</th></tr></thead>
+              <tbody>
+                {bySeason.map((s) => (
+                  <tr key={s.season_id}>
+                    <td>{seasonName.get(s.season_id) ?? "?"}</td>
+                    <td className="!text-left">{s.team_id ? <Link href={`/teams/${s.team_id}`} className="hover:text-white">{teams.get(s.team_id)?.name}</Link> : "–"}</td>
+                    <td>{s.maps}</td><td>{pct(s.wins, s.maps)}</td><td>{s.kd ?? "–"}</td><td>{s.first_bloods}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       )}

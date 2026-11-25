@@ -3,6 +3,8 @@ export type Team = {
   name: string;
   tag: string | null;
   challonge_participant_id: number | null;
+  season_id: string | null;
+  group_name: string | null; // "Group A", from the season sign-up sheet
 };
 
 export type Player = {

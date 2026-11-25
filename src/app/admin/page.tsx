@@ -4,9 +4,11 @@ import {
 } from "@/app/actions";
 import { getViewer } from "@/lib/auth";
 import type { PlayerRank } from "@/lib/ranks";
+import { currentSeason } from "@/lib/season";
 import { supabaseAdmin, supabasePublic } from "@/lib/supabase";
 import { riotId, type Player, type Team } from "@/lib/types";
 import { ClaimDecision, UnlinkButton } from "./ClaimButtons";
+import RosterImport from "./RosterImport";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +17,10 @@ const field = "rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm";
 export default async function AdminPage() {
   const viewer = await getViewer();
   if (!viewer?.isAdmin) return <p>Admins only.</p>;
+  const season = await currentSeason(); // admin tools work on the current season
   const db = supabasePublic();
   const [{ data }, { data: playerRows }, { data: rankRows }] = await Promise.all([
-    db.from("teams").select("*").order("name"),
+    db.from("teams").select("*").eq("season_id", season.id).order("name"),
     db.from("players").select("*").order("riot_name"),
     db.from("player_ranks").select("player_id, status, error"),
   ]);
@@ -42,7 +45,20 @@ export default async function AdminPage() {
 
   return (
     <div className="max-w-2xl space-y-8">
-      <h1 className="text-2xl font-bold">Admin</h1>
+      <h1 className="text-2xl font-bold">Admin <span className="text-base font-normal text-zinc-500">· current season {season.name}</span></h1>
+
+      <section className="card space-y-3 p-4">
+        <h2 className="font-semibold">Season sign-up sheet</h2>
+        <p className="text-sm text-zinc-400">
+          Upload the season&apos;s Player Directory (.xlsx) and preview the changes before anything is saved. Players are
+          matched by Discord, then Riot ID, so returning players keep their history even if they renamed.
+        </p>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-400">
+          <li><b className="text-zinc-200">Update {season.name} rosters</b>: roster changes mid-season. Players missing from the sheet leave their team.</li>
+          <li><b className="text-zinc-200">Start a new season</b>: archives {season.name} (still viewable from the season menu) and builds the new season&apos;s teams from the sheet.</li>
+        </ul>
+        <RosterImport currentSeason={season.name} />
+      </section>
 
       <section className="card space-y-3 p-4">
         <h2 className="font-semibold">

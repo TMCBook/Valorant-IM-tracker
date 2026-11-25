@@ -1,14 +1,16 @@
 import MatchList from "@/components/MatchList";
 import { teamMap } from "@/lib/data";
+import { NO_SEASON, seasonContext } from "@/lib/season";
 import { supabasePublic } from "@/lib/supabase";
 import type { Match } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function MatchesPage() {
+  const sid = (await seasonContext()).selected?.id ?? NO_SEASON;
   const [teams, { data }] = await Promise.all([
     teamMap(),
-    supabasePublic().from("matches").select("*").order("scheduled_at", { ascending: false, nullsFirst: false }),
+    supabasePublic().from("matches").select("*").eq("season_id", sid).order("scheduled_at", { ascending: false, nullsFirst: false }),
   ]);
   const all = (data ?? []) as Match[];
   return (

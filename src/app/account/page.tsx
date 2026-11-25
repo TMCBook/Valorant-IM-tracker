@@ -4,6 +4,7 @@ import ActionForm from "@/components/ActionForm";
 import { cancelClaimAction, claimProfileAction, signOut, updateMyRiotIdAction } from "@/app/actions";
 import { getViewer } from "@/lib/auth";
 import { discordMatch } from "@/lib/claims";
+import { currentSeason } from "@/lib/season";
 import { supabaseAdmin } from "@/lib/supabase";
 import { riotId, type Team } from "@/lib/types";
 
@@ -16,10 +17,11 @@ export default async function AccountPage() {
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
 
+  const season = await currentSeason();
   const db = supabaseAdmin(); // server only: reads sign-up Discords and claims, never sent to the browser as a list
   const [{ data: players }, { data: teams }, { data: pending }] = await Promise.all([
     db.from("players").select("id, riot_name, riot_tag, team_id, user_id, discord").order("riot_name"),
-    db.from("teams").select("*").order("name"),
+    db.from("teams").select("*").eq("season_id", season.id).order("name"),
     db.from("player_claims").select("player_id").eq("user_id", viewer.userId).eq("status", "pending").maybeSingle(),
   ]);
   const all = (players ?? []) as Row[];

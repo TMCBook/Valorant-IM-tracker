@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { applyImport, planImport, type Mode, type Plan } from "@/lib/roster-import";
+import { parseRosterSheet } from "@/lib/roster-sheet";
+import { currentSeason, SEASON_COOKIE } from "@/lib/season";
 import { redirect } from "next/navigation";
 import * as z from "zod";
 import { getViewer, requireAdmin, requireUploader } from "@/lib/auth";
@@ -88,6 +92,11 @@ export async function saveMatchMap(raw: SaveMapInput): Promise<ActionResult> {
         .select("id")
         .single();
       if (error) throw new Error(`Couldn't add ${row.newName}: ${error.message}`);
+      // Put them on that team's roster for the match's season too.
+      await db.from("season_rosters").upsert(
+        { season_id: match.season_id, player_id: created.id, team_id: row.teamId },
+        { onConflict: "season_id,player_id" },
+      );
       playerIds.push(created.id);
     }
     const real = playerIds.filter(Boolean);
@@ -298,6 +307,54 @@ export async function unlinkProfileAction(playerId: string): Promise<ActionResul
   }
 }
 
+// ---------- Season sign-up sheet import ----------
+
+async function readSheet(form: FormData) {
+  const file = form.get("file");
+  if (!(file instanceof File) || !file.size) throw new Error("Choose the sign-up sheet (.xlsx).");
+  if (!/\.xlsx$/i.test(file.name)) throw new Error("The sign-up sheet must be an .xlsx file.");
+  const mode = form.get("mode") === "new" ? "new" : "update";
+  return {
+    sheet: await parseRosterSheet(await file.arrayBuffer()),
+    mode: mode as Mode,
+    seasonName: String(form.get("seasonName") ?? ""),
+    updateIds: form.get("updateIds") === "on",
+  };
+}
+
+/** Admin: show what importing this sheet would change. Writes nothing. */
+export async function previewRosterAction(form: FormData): Promise<{ ok: true; plan: Plan } | { ok: false; error: string }> {
+  try {
+    await requireAdmin();
+    const { sheet, mode, seasonName, updateIds } = await readSheet(form);
+    return { ok: true, plan: await planImport(sheet, mode, seasonName, updateIds) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Admin: import the sheet (and for a new season, archive the current one). */
+export async function applyRosterAction(form: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const { sheet, mode, seasonName, updateIds } = await readSheet(form);
+    const { plan, errors } = await applyImport(sheet, mode, seasonName, updateIds);
+    // Show the new season to the admin right away.
+    if (mode === "new") (await cookies()).set(SEASON_COOKIE, plan.seasonName, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+    revalidatePath("/", "layout");
+    const done = `${mode === "new" ? `Started ${plan.seasonName}` : `Updated ${plan.seasonName}`}: ${plan.counts.teams} teams, ${plan.counts.players} players.`;
+    return errors.length ? { ok: false, error: `${done} ${errors.length} problem(s): ${errors.join("; ")}` } : { ok: true, message: done };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Remember which season this visitor is browsing (top-bar picker). */
+export async function setSeasonAction(name: string) {
+  const jar = await cookies();
+  jar.set(SEASON_COOKIE, name.slice(0, 20), { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+}
+
 export async function signOut() {
   const supabase = await supabaseServer();
   await supabase.auth.signOut();
@@ -323,13 +380,27 @@ export async function addPlayerAction(_: ActionResult | null, form: FormData): P
     const [name, tag] = String(form.get("riotId") ?? "").split("#").map((s) => s.trim());
     if (!name) throw new Error("Enter a Riot ID like Name#TAG.");
     const teamId = String(form.get("teamId") ?? "") || null;
-    const { error } = await supabaseAdmin()
+    const captain = form.get("captain") === "on";
+    const db = supabaseAdmin();
+    const { data: saved, error } = await db
       .from("players")
       .upsert(
-        { riot_name: name, riot_tag: tag || null, team_id: teamId, is_captain: form.get("captain") === "on" },
+        { riot_name: name, riot_tag: tag || null, team_id: teamId, is_captain: captain },
         { onConflict: "riot_name,riot_tag" },
-      );
+      )
+      .select("id")
+      .single();
     if (error) throw new Error(error.message);
+    // Keep the current season's roster in step with the player's team.
+    const season = await currentSeason();
+    if (teamId) {
+      await db.from("season_rosters").upsert(
+        { season_id: season.id, player_id: saved.id, team_id: teamId, is_captain: captain },
+        { onConflict: "season_id,player_id" },
+      );
+    } else {
+      await db.from("season_rosters").delete().eq("season_id", season.id).eq("player_id", saved.id);
+    }
     revalidatePath("/", "layout");
     return { ok: true, message: `Saved ${name}${tag ? `#${tag}` : ""}.` };
   } catch (e) {
@@ -377,8 +448,8 @@ export async function addTeamAction(_: ActionResult | null, form: FormData): Pro
     if (!name) throw new Error("Enter a team name.");
     const { error } = await supabaseAdmin()
       .from("teams")
-      .insert({ name, tag: String(form.get("tag") ?? "").trim() || null });
-    if (error) throw new Error(error.code === "23505" ? "That team already exists." : error.message);
+      .insert({ name, tag: String(form.get("tag") ?? "").trim() || null, season_id: (await currentSeason()).id });
+    if (error) throw new Error(error.code === "23505" ? "That team already exists this season." : error.message);
     revalidatePath("/", "layout");
     return { ok: true, message: `Added ${name}.` };
   } catch (e) {
@@ -396,6 +467,7 @@ export async function createMatchAction(_: ActionResult | null, form: FormData):
     const { error } = await supabaseAdmin()
       .from("matches")
       .insert({
+        season_id: (await currentSeason()).id,
         team_a_id: a,
         team_b_id: b,
         round_label: String(form.get("round") ?? "").trim() || null,

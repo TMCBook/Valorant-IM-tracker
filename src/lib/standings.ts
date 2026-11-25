@@ -12,14 +12,15 @@ export type Standing = {
   roundDiff: number;
 };
 
-/** Series and map records for every team, best first. */
-export async function standings(): Promise<Standing[]> {
+/** Series and map records for every team in one season, best first. */
+export async function standings(seasonId: string): Promise<Standing[]> {
   const db = supabasePublic();
-  const [{ data: teams }, { data: matches }, { data: maps }] = await Promise.all([
-    db.from("teams").select("*"),
-    db.from("matches").select("*").eq("status", "completed"),
-    db.from("match_maps").select("*"),
+  const [{ data: teams }, { data: matches }] = await Promise.all([
+    db.from("teams").select("*").eq("season_id", seasonId),
+    db.from("matches").select("*").eq("season_id", seasonId).eq("status", "completed"),
   ]);
+  const ids = (matches ?? []).map((m) => m.id as string);
+  const { data: maps } = ids.length ? await db.from("match_maps").select("*").in("match_id", ids) : { data: [] };
   const rows = new Map<string, Standing>(
     ((teams ?? []) as Team[]).map((t) => [
       t.id,

@@ -1,4 +1,5 @@
 import "server-only";
+import { currentSeason } from "./season";
 import { supabaseAdmin } from "./supabase";
 
 type CParticipant = {
@@ -47,16 +48,18 @@ export async function syncChallonge(tournament: string) {
     get<CMatch[]>(`${id}/matches.json`),
   ]);
   const db = supabaseAdmin();
+  const season = await currentSeason();
 
-  // Teams: match by name so teams created by hand are reused.
+  // Teams: match by name within the current season so imported/hand-made teams are reused.
   const { data: teams, error: tErr } = await db
     .from("teams")
     .upsert(
       participants.map(({ participant: p }) => ({
         name: (p.display_name || p.name).trim(),
         challonge_participant_id: p.id,
+        season_id: season.id,
       })),
-      { onConflict: "name" },
+      { onConflict: "season_id,name" },
     )
     .select("id, challonge_participant_id");
   if (tErr) throw new Error(tErr.message);
@@ -76,6 +79,7 @@ export async function syncChallonge(tournament: string) {
     .map((m) => ({
       m,
       row: {
+        season_id: season.id,
         challonge_match_id: m.id,
         round_label: m.round > 0 ? `Round ${m.round}` : `Losers Round ${-m.round}`,
         team_a_id: teamByCid.get(m.player1_id!)!,

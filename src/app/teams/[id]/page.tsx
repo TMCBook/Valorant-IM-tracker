@@ -16,19 +16,21 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = supabasePublic();
-  const [teams, table, ranks, rankPng, { data: roster }, { data: matches }] = await Promise.all([
-    teamMap(),
-    standings(),
+  const teams = await teamMap();
+  const team = teams.get(id);
+  if (!team) notFound();
+  const [table, ranks, rankPng, { data: roster }, { data: matches }] = await Promise.all([
+    standings(team.season_id ?? ""),
     currentRanks(),
     rankIcons(),
-    db.from("player_career").select("*").eq("team_id", id).order("kd", { ascending: false, nullsFirst: false }),
+    db.from("player_season_career").select("*").eq("team_id", id).order("kd", { ascending: false, nullsFirst: false }),
     db.from("matches").select("*").or(`team_a_id.eq.${id},team_b_id.eq.${id}`)
       .order("scheduled_at", { ascending: false, nullsFirst: false }),
   ]);
-  const team = teams.get(id);
-  if (!team) notFound();
-  const rank = table.findIndex((r) => r.team.id === id);
-  const rec = table[rank];
+  // Rank within the team's group (Group A / B), like the standings page.
+  const groupTable = table.filter((r) => (r.team.group_name ?? "") === (team.group_name ?? ""));
+  const rank = groupTable.findIndex((r) => r.team.id === id);
+  const rec = groupTable[rank];
 
   return (
     <div className="space-y-8">
@@ -36,7 +38,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         <h1 className="text-3xl font-bold">{team.name}</h1>
         {rec && (
           <p className="text-zinc-400">
-            #{rank + 1} · {rec.wins}–{rec.losses} series · {rec.mapWins}–{rec.mapLosses} maps
+            #{rank + 1}{team.group_name ? ` in ${team.group_name}` : ""} · {rec.wins}–{rec.losses} series · {rec.mapWins}–{rec.mapLosses} maps
           </p>
         )}
       </div>

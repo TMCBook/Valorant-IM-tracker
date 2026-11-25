@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getViewer } from "@/lib/auth";
+import { currentSeason } from "@/lib/season";
 import { supabasePublic } from "@/lib/supabase";
 import type { Match, Player, Team } from "@/lib/types";
 import UploadForm from "./UploadForm";
@@ -30,9 +31,10 @@ export default async function UploadPage({
   }
 
   const db = supabasePublic();
+  const season = await currentSeason(); // uploads always go to the current season
   const [{ data: matches }, { data: teams }, { data: players }] = await Promise.all([
-    db.from("matches").select("*").order("scheduled_at", { ascending: false, nullsFirst: false }).limit(100),
-    db.from("teams").select("*").order("name"),
+    db.from("matches").select("*").eq("season_id", season.id).order("scheduled_at", { ascending: false, nullsFirst: false }).limit(100),
+    db.from("teams").select("*").eq("season_id", season.id).order("name"),
     db.from("players").select("*").order("riot_name"),
   ]);
   const { match } = await searchParams;

@@ -33,7 +33,10 @@ const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPAB
 
 type Team = { id: string; name: string };
 type Player = { id: string; riot_name: string; team_id: string | null };
-const { data: teams } = await db.from("teams").select("id, name");
+// Only the current season's teams; new matches go into the current season.
+const { data: season } = await db.from("seasons").select("id, name").eq("is_current", true).single();
+if (!season) throw new Error("No current season. Run supabase/migrations/005_seasons.sql.");
+const { data: teams } = await db.from("teams").select("id, name").eq("season_id", season.id);
 const { data: players } = await db.from("players").select("id, riot_name, team_id");
 const rosterOf = (teamId: string) => (players as Player[]).filter((p) => p.team_id === teamId);
 
@@ -209,7 +212,7 @@ for (const maps of series.values()) {
   let match = existing?.[0];
   if (!match) {
     const { data, error } = await db.from("matches")
-      .insert({ team_a_id: A.id, team_b_id: B.id, scheduled_at: when })
+      .insert({ season_id: season.id, team_a_id: A.id, team_b_id: B.id, scheduled_at: when })
       .select("id, team_a_id").single();
     if (error) throw error;
     match = data;

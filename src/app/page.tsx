@@ -1,6 +1,7 @@
 import Link from "next/link";
 import MatchList from "@/components/MatchList";
 import { teamMap } from "@/lib/data";
+import { NO_SEASON, seasonContext } from "@/lib/season";
 import { supabasePublic } from "@/lib/supabase";
 import type { Career, Match, MatchMap } from "@/lib/types";
 
@@ -11,11 +12,12 @@ export default async function Home() {
     return <p>Set up <code>.env.local</code> first. See the README.</p>;
   }
   const db = supabasePublic();
+  const sid = (await seasonContext()).selected?.id ?? NO_SEASON;
   const [teams, recent, upcoming, leaders] = await Promise.all([
     teamMap(),
-    db.from("matches").select("*").eq("status", "completed").order("scheduled_at", { ascending: false, nullsFirst: false }).limit(10),
-    db.from("matches").select("*").eq("status", "scheduled").order("scheduled_at", { ascending: true, nullsFirst: false }).limit(8),
-    db.from("player_career").select("*").gte("maps", 2).order("kd", { ascending: false, nullsFirst: false }).limit(10),
+    db.from("matches").select("*").eq("season_id", sid).eq("status", "completed").order("scheduled_at", { ascending: false, nullsFirst: false }).limit(10),
+    db.from("matches").select("*").eq("season_id", sid).eq("status", "scheduled").order("scheduled_at", { ascending: true, nullsFirst: false }).limit(8),
+    db.from("player_season_career").select("*").eq("season_id", sid).gte("maps", 2).order("kd", { ascending: false, nullsFirst: false }).limit(10),
   ]);
 
   const recentMatches = (recent.data ?? []) as Match[];
